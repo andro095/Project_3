@@ -1,0 +1,11 @@
+%YAML:1.0
+rgb_calibration: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: f
+   data: [575.8157348632812, 0.0, 319.5, 0.0, 575.8157348632812, 239.5, 0.0, 0.0, 1.0]
+ir_calibration: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: f
+   data: [525.0, 0.0, 319.5, 0.0, 525.0, 239.5, 0.0, 0.0, 1.0]
