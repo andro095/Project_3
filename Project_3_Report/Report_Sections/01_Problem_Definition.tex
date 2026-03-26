@@ -1,0 +1,31 @@
+\section{Problem Description}
+\subsection{Problem Definition and Requirements}
+The explosive growth of online shopping and commerce years ago created a significant interest in warehouse operations automation. These operations include filling and packing multiple orders. In response to growing interest, Amazon introduced in 2015 the Amazon Picking Challenge to develop robotic systems capable of picking and packing objects. This challenge involves perception, motion planning, and grasping of objects that are placed in a semi-structured way inside special bins.
+
+This project aims to design and implement a pose estimation algorithm for at least five objects in the dataset. Results must be reported in terms of translational and rotational error. 
+
+\subsection{Dataset}
+The dataset provided for this project contains over 10,000 depth and RGB images along with the bin masking. These images come with annotated 6-DOF poses for 24 objects, control for environmental factors like variations in clutter, multiple viewpoints, and multiple frames to reduce sensor noise. Additionally, a 3D CAD mesh model and Camera calibration files were provided. The ground truth labels for object rotation and translation with respect to the camera are available in the provided YAML files. \cite{Rennie2016}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{cheezit_original_image.png}
+        \caption{RGB Image}
+        \label{fig:cheezit_rgb}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{cheezit_depth_map.png}
+        \caption{Depth Map}
+        \label{fig:cheezit_depth}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{cheezit_bin_mask.png}
+        \caption{Bin Mask}
+        \label{fig:cheezit_mask}
+    \end{subfigure}
+    \caption{Sample data for the Cheez-It box from the Rutgers APC dataset, displaying the RGB image, corresponding depth map, and bin mask.}
+    \label{fig:cheezit_samples}
+\end{figure}

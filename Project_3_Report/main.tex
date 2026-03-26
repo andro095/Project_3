@@ -1,0 +1,31 @@
+\documentclass{article}
+
+\newcommand{\CustomsDir}{Customs}
+
+% Variables import
+\input{\CustomsDir/variables}
+
+% Packages import
+\input{\CustomsDir/packages}
+
+% Configs import
+\input{\ConfigsDir/configs}
+
+\title{A Pose Estimation Algorithm to Detect Objects \\[0.5em] \Large Project 3 Report}
+\author{Andre Rodriguez}
+
+\begin{document}
+\maketitle
+
+% Report Sections
+\input{\ReportsDir/01_Problem_Definition}
+\input{\ReportsDir/02_Pipeline_Design}
+\input{\ReportsDir/03_Results_Discussion}
+
+% References
+\bibliographystyle{apalike}
+\bibliography{references}
+
+\input{\ReportsDir/04_Appendix}
+
+\end{document}

@@ -308,3 +308,13 @@ pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/pycharm,jupyternotebooks,python,opencv
 /data/
+/Project_3_Report/Images/
+/*.zip
+/Project_3_Report/main.aux
+/Project_3_Report/main.bbl
+/Project_3_Report/main.blg
+/Project_3_Report/main.fdb_latexmk
+/Project_3_Report/main.fls
+/Project_3_Report/main.log
+/Project_3_Report/main.out
+/Project_3_Report/main.synctex.gz

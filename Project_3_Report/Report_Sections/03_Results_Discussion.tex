@@ -1,0 +1,148 @@
+\section{Results and Discussion}
+
+\subsection{Summary of Results}
+The pipeline was tested against 22 objects under different conditions, such as the clutter state, mapping position, or bin location. To evaluate the accuracy of the algorithm, the translational (in meters) and the rotational (in degrees) errors were calculated for each processed scene.
+
+For illustration purposes, a sample of three objects was selected to illustrate the pipeline's performance across different geometries and textures: the \textit{Cheez-It Box}, \textit{Feline Greenies Dental Treats}, and the \textit{Genuine Joe Plastic Stir Sticks}. The error scatter plots for these objects are presented in Figure \ref{fig:main_results}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.75\textwidth]{cheezit_big_original.png}
+    
+    \vspace{0.5cm}
+    \includegraphics[width=0.75\textwidth]{feline_greenies_dental_treats.png}
+    
+    \vspace{0.5cm}
+    \includegraphics[width=0.75\textwidth]{genuine_joe_plastic_stir_sticks.png}
+    \caption{Translational and rotational error for the three objects. The markers separate the level of clutter present in the bin for each evaluated frame.}
+    \label{fig:main_results}
+\end{figure}
+
+\subsubsection*{General Findings and Patterns}
+A general analysis of the plots and the overall dataset statistics shows many key insights of pipeline's behaviour:
+
+\begin{itemize}
+    \item \textbf{Translational Error Groups:} The scatter plots reveal, for some objects, the presence of two relevant groups regarding the translational error. The first group, a success group with translation errors below $0.15$ meters. On the other hand, a "failure" group whose translational error exceeds $0.30$ meters. This behaviour suggests that when the feature-guided isolation step presents good results, the estimated translation is closely aligned with the ground truth. However, when the isolation steps fail due to a poor performance of the SIFT matching, the crop leads to a partial misalignment. 
+    \item \textbf{Rotational Error Group:} Similar to the translational error groups, the rotational errors are generally divided into three horizontal groups across many scatter plots: a lower-group error between $50^\circ$ and $70^\circ$, a mid-group error between $80^\circ$ and $120^\circ$, and a high-group error between $130^\circ$ and $150^\circ$. The reason behind these specific groups corresponds to the symmetry of the target objects, where the ICP algorithm could match the shape, but in some cases, invert ($\sim 180^\circ$) the local minima.
+    \item \textbf{Texture Dependant:} It was observed that the pipeline's accuracy was bottlenecked during the feature matching phase. Objects that presented a distinctive texture generated, on average, more SIFT matches compared to the ones with an undistinctive texture, resulting in less error clustering. Objects with less texture (such as the stir sticks) relied on fewer features, pushing them into more error grouping. 
+    \item \textbf{Clutter resilient:} In general, the level of clutter (represented using different markers) did not represent a significant degradation in the translation or rotation accuracy. This proved that the approach taken was successfully capable of deleting surrounding clutter before the registration step.
+\end{itemize}
+
+The remaining 19 scatter plots of the objects evaluated in this project can be found in the Appendix
+\ref{sec:appendix_a}.
+
+\subsection{Insights from Specific Objects}
+While the findings presented above follow overall trends across the 22 objects that were tested, a closer look at specific outliers in the results revealed how differences in the physical geometry, texture, and material have an effect on the pipeline's performance. The objects below presented some plot patterns that have some degree of difference from the general trend:
+
+\begin{itemize}
+    \item \textbf{Rolodex Jumbo Pencil Cup:} 
+    Unlike the rest of the objects tested, the Rolodex Pencil Cup (see Figure \ref{fig:appendix_results_6}) presented several points with recording translational error that exceeded $0.30$ meters. This distinct shift of the translational errors seems to be tied to how the object is composed: a black and repetitive wire mesh. The SIFT Matching step struggled to find unique keypoints due to its grid pattern, leading to many false matches inside the bin. Furthermore, due to its mesh structure, the depth sensor of the Kinect camera failed to register the accurate object depth, capturing it sometimes inside or behind. This created a wrong 3D center, placing the crop far from the ground truth values. 
+
+    \item \textbf{Cheez-It Box:} 
+    The Cheezit Box (see Figure \ref{fig:main_results}) shows how the "local minima" problem can affect objects found in the dataset. Because the object texture was composed of many high-contrast graphics, the feature-matching phase of the pipeline succeeded up to the point that it pulled all points in the graph into one of the lowest translational error groups ($< 0.10$ meters). However, because the CAD model of the object is a perfect prism, the ICP algorithm in some frames snapped to the wrong flat face. This is evident when looking at the scatter plot, where the translational error ranges within acceptable values, but the rotational errors are located around similar values.
+
+    \item \textbf{Dr. Brown's Bottle Brush:} 
+    The Dr. Brown's Bottle Brush (see Figure \ref{fig:appendix_results_7}) exposes the geometric vulnerabilities that the feature-guided approach has. As observed in the scatter plot, there are almost no frames with a translational error calculated below $0.05$ meters, alongside several values exceeding the $0.30$ meters. This particular case is explained by its long and non-planar physical structure. Many SIFT features were extracted from the textured bristles of the central label, while the plastic of the object went mostly undetected. Therefore, the calculated 3D center is biased toward the bristles rather than the true center of the object. Although the feature matching was able to succeed, the center offset prevented the translation error from reaching values near zero. Additionally, the depth sensor of the camera constantly failed to deal with the thin handle of the object, making the crop missing bulk parts of the object, which caused several misalignments of $>0.30$ meters.
+
+    \item \textbf{Safety Works Safety Glasses:}
+    \label{sec:transparent_plastic}
+    The Safety Glasses (see Figure \ref{fig:appendix_results_6}) represented a big challenge that led to erratic pose estimations. The depth sensor included in the Kinect camera cannot accurately resolve clear plastics, as infrared light is able to pass through the lenses unpredictably. In combination with the object textures for the SIFT algorithm, the scene point cloud generated for this object presented heavy distortions, leading to a dispersed scatter plot without error groupings.
+\end{itemize}
+
+\subsection{Pipeline Performance}
+To verify the computational efficiency of the chosen approach, the execution time was recorded for every image frame processed from the 22 objects evaluated. One of the key decisions to make the pipeline the most efficient possible without sacrificing the accuracy was the reduction of the size of the 3D scene point cloud before the execution of the ICP algorithm. With this decision, the pipeline achieved high processing speeds on average. A summary table of the global timing statistics, including the highlights of the fastest and slowest objects, is presented in the following table:
+
+\begin{table}[htbp]
+    \centering
+    \renewcommand{\arraystretch}{1.3} % Adds vertical padding to rows for a cleaner look
+    \caption{Summary of processing execution times for 22 valid objects.}
+    \vspace{0.2cm} % Adds slight spacing between caption and table
+    \begin{tabular}{|l|c|l|}
+        \hline
+        \textbf{Performance Metric} & \textbf{Time (s)} & \textbf{Notes} \\
+        \hline \hline
+        Global Minimum Time & 0.156 & Fastest recorded time for a single frame. \\
+        \hline
+        Global Mean Time & 2.004 & Average time across all available frames. \\
+        \hline
+        Global Maximum Time & 1021.588 & Slowest recorded time for a single frame. \\
+        \hline \hline
+        Fastest Object (Mean) & 1.100 & Champion Copper Plus Spark Plug \\
+        \hline
+        Slowest Object (Mean) & 4.498 & Genuine Joe Plastic Stir Sticks \\
+        \hline
+    \end{tabular}
+    \label{tab:timing_stats}
+\end{table}
+
+\subsubsection*{Performance Insights}
+A further analysis of the execution times  of all tested objects provides evidence of a  relation of dependence between the 2D feature-matching step and the 3D steps:
+
+\begin{itemize}
+    \item \textbf{High-Speed Averages:} The general processing time mean of 2 seconds per scene image validates the performance reasons behind the "Feature-Guided" approach. By using the SIFT algorithm to facilitate object detection and make the bin clutter removal process easier, the ICP algorithm was required just to compare 15,000 CAD points of the model against a reduced number of points of the scene cloud. This allows objects that possess reliable textures, like the Champion Copper Plus Spark Plug, to process the pipeline in less than 2 seconds. 
+    
+    \item \textbf{The Cost of SIFT Failure:} The results illustrate the computational penalty when the isolation process of the object fails. The Stir Sticks recorded the slowest mean time (5 s) across all objects and contributed to several time spikes. As discussed on the previous section (see \ref{sec:transparent_plastic}), the problem of transparent plastic objects causes the SIFT algorithm to fail, preventing a proper crop around the object. Therefore, the ICP algorithm is forced into a large number of iterations over a highly dense scene point cloud, spiking the CPU load and resulting in massive processing times, as observed with the global maximum outlier, which took more than 15 minutes to process the frame.
+\end{itemize}
+
+\subsection{Effects of Clutter, Camera Position, and Frame Variance}
+Beyond object properties, the dataset provided variations on the scene conditions that made it possible to evaluate the pipeline against environmental variables. Analyzing the results, three key insights were extracted from the pipeline designed:
+
+\begin{itemize}
+    \item \textbf{Independence from Clutter:} The amount of clutter present in the bin with the target object did not represent a great impact on pose estimation accuracy. The isolation approach taken successfully removed all the clutter before the registration process, making the ICP step clutter-proof for the majority of objects. 
+    
+    \item \textbf{Sensitivity to Camera Viewpoint:} For certain object, the position of the camera respect to the bin impacted the accuracy of the pose estimation, such as the Kong Duck Dog Toy (see Figure \ref{fig:appendix_results_3}) where some tests made it was observed that when the camera was 10 cm to left of the bin center, the translation error increased 3 times (0.15 mts) than when the camera was placed at the bin center (0.04 mts). Suboptimal viewing angles could introduce occlusions, which degrade the pipeline's accuracy. 
+    
+    \item \textbf{Temporal Variance and Sensor Noise:} For some objects (e.g., Crayola Box) and under the same environmental conditions (same bin, clutter, and position), the pipeline's accuracy occasionally varied across multiple frames. This variance in accuracy demonstrates the pipeline's vulnerability to image distortions. Therefore, to build a more robust system, an average of pose estimation should be used to minimize its effects. 
+\end{itemize}
+
+\subsection{SIFT Performance}
+The accuracy of the pipelines is influenced by the SIFT algorithm's ability to identify the target object. The table \ref{tab:sift_matches} highlights remarkable objects according to the average number of matches, after Lowe's Ratio Test was applied:
+
+\begin{table}[htbp]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \caption{Average SIFT match count per object for the highest and lowest ones.}
+    \vspace{0.2cm}
+    \begin{tabular}{|l|c|c|}
+        \hline
+        \textbf{Object} & \textbf{Average Matches} & \textbf{Performance Category} \\
+        \hline \hline
+        Cheez-It Box & 259.1 & Highest \\
+        \hline
+        Kong Air Dog Squeakair Tennis Ball & 102.1 & Highest \\
+        \hline
+        Stanley 66-052 & 101.3 & Highest \\
+        \hline \hline
+        Kyjen Squeakin Eggs Plush Puppies & 4.9 & Lowest \\
+        \hline
+        Sharpie Accent Tank Style Highlighters & 31.0 & Lowest \\
+        \hline
+        Mommy's Helper Outlet Plugs & 34.0 & Lowest \\
+        \hline
+    \end{tabular}
+    \label{tab:sift_matches}
+\end{table}
+
+\subsubsection*{Performance Insights}
+By connecting the match counts to the errors observed in Section 3.2, the core behaviours of the pipeline can be explained:
+
+\begin{itemize}
+    \item \textbf{High Density leads to high Accuracy:} 
+    Objects with good textures, such as Cheezit Box, guarantee a highly accurate 3D center calculation. This shows a direct correlation to its unusual tight clustering of translation errors (less than $0.10$ meters for all frames).
+    
+    \item \textbf{Sparse Matches Cause Center Misalignment :} Objects with highly localized texture, like those with transparent plastic (e.g., Dr. Brown's Bottle Brush), returned keypoints located on specific areas of the object. These biases towards the object part with more texture caused the 3D center calculation to be away from the real center, preventing translation error near zero
+\end{itemize}
+
+\subsection{Improvements for Future Work}
+While the pipeline showed high accuracy and efficiency for textured objects, the identified failures in previous sections highlight improvement areas for future development. These are some of the proposed improvements:
+
+\begin{itemize}
+    \item \textbf{Rotational Symmetry:} 
+    To solve the issue presented on objects with high symmetry, such as the Cheezit Box, that resulted in inverted orientations, a secondary step of RGB-color verification should be used using the mtl texture. After the processing of the ICP algorithm, the pipeline can compare the color of the scene points to the aligned face of the CAD model to filter out poses that are mathematically correct but visually incorrect.
+
+    \item \textbf{Textureless and Transparent Objects:} 
+    Just relying on the SIFT algorithm makes the pipeline inaccurate with textureless or reflective objects, like the Stir Sticks. Future work could combine 2D feature matching with 3D Point Pair Features (PPF). The PPF technique relies more on the 3D geometric surface normals rather than intensity gradients, making it possible to isolate objects based on their physical shape. 
+
+    \item \textbf{Center Calculation for Elongated Objects:} 
+    For long-shaped objects, such as the Bottle Brush, the SIFT biases to a localized group of matches causes a miscalculation of the 3D center of the object. Hence, when cropping the scene point cloud, part of the object would be affected. This can be improved by substituting the static cropping with a dynamic scaled Oriented Bounding Box, which ensures the full 3D object is passed to the ICP algorithm regardless of the object textures.
+\end{itemize}

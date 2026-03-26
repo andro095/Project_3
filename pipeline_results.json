@@ -1,0 +1,11 @@
+{
+    "champion_copper_plus_spark_plug": {
+        "statistics": {
+            "time": {
+                "min": 0.40216779708862305,
+                "max": 29.68642783164978,
+                "mean": 1.1000420018304529,
+                "std_dev": 1.6100532004637231
+            },
+            "matches": {
+                "min": 

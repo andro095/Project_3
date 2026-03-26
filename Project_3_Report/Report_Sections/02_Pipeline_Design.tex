@@ -1,0 +1,108 @@
+\section{Pipeline Design}
+\subsection{Approaches evaluated}
+
+To design a pipeline for pose estimation of an object for the semi-structured, cluttered environments presented in the dataset, it was required to evaluate multiple 3D machine vision approaches. Three primary ones were developed and tested before finishing the architecture.
+
+\begin{description}
+    \item[Approach 1: Feature Matching with PnP Ransac]\hfill\\
+    \textbf{Description:} As the first approach taken, it consisted of extracting the SIFT keypoints from the 2D object texture map and masked scene image, both provided in the datasets. The matched 2D points were then passed into a PnP (Perspective-n-Point) solver, assuming that the 2D template was mapped against a flat planar surface (\textit{i.e.} $Z=0$) to calculate the 6-DOF pose. \\
+    \textbf{Reason for Rejection:} The 2D templates provided in the dataset are representations of all object faces. PnP assumed that all the features existed in a single plane, matching features extracted from the tested image across different physical faces, causing several distortions. This resulted in a mismatch in translational scale and rotational matrices.
+    
+    \item[Approach 2: Pure Multi-Hypothesis ICP]\hfill\\
+    \textbf{Description:} This approach consisted of generating full 3D point clouds from the dataset depth maps and the CAD models provided. An initial translation was estimated by the calculation of the centroid of the scene point cloud, shifting half of the object's depth to account for the visible surface. An ICP (Interest Closest Point) algorithm is run, testing six different starting rotations, preventing local minima.\\
+    \textbf{Reason for Rejection:} While mathematically working for an object with no clutter, the dataset's bin masks (the region where the objects reside in the bin) contained significant clutter. The calculation of the scene centroid took into account all the objects in the bin, putting the initial guess of translation far away from the ground truth. Furthermore, running a high-iteration ICP for the number of images for many objects resulted in unacceptable processing times (per object).
+    
+    \item[Approach 3: Feature-Guided Isolation]\hfill\\
+    \textbf{Description:} The selected approach represents a hybrid approach between feature matching and 3D registration. The job of the SIFT algorithm is to act as a "spotlight" to find the pixel coordinates of the target object. Then, the 3D generated scene point cloud is radically cropped to a small cloud around its centroid, and a fast ICP is performed. \\
+    \textbf{Reason for Selection:} The reason to select this approach is that it deals with the unwrapped-template limitations of the PnP and the clutter translation drift of the global ICP. By removing the clutter present in the cloud before the registration process, the algorithm processing time decreases significantly, providing an isolated target for the ICP algorithm. Further analysis of the performance of the method is explained in Section 3.
+\end{description}
+
+\subsection{Pipeline Overview}
+
+The pipeline based on "Feature-Guided Isolation" is designed to estimate the pose of the target object by removing the effects of the clutter and the 2D texture distortions. As shown in Figure \ref{fig:pipeline_overview}, the pipeline's architecture is separated into four main phases: Preprocessing, Feature Matching, 3D Generation and Isolation, and Pose Registration.
+
+First, we take the multiple image inputs, the RGB image, the bin mask, the depth map, the object's texture, and the CAD model to be preprocessed and converted into appropriate formats. Then, the pipeline moves to the Feature matching phase, which identifies the 2D coordinates of the object within the scene. Next, in the third phase, these 2D coordinates guide the location where the 3D scene point cloud is created, just to be cropped around the object target, removing the unnecessary clutter. To finish with this pipeline, the scene point cloud is then used by a Multi-ICP algorithm that aligns the 3D model of the object to the isolated scene cloud to obtain the final rotational and translational matrices.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.7\textwidth]{MV Project 3_ Pipeline Overview.png}
+    \caption{High-level overview of the Feature-Guided Isolation pipeline, detailing the data flow from raw multimodal inputs to the final 6-DOF pose estimation.}
+    \label{fig:pipeline_overview}
+\end{figure}
+
+\subsection{Pipeline Steps}
+
+\subsubsection{Phase 1: Preprocessing}
+The preprocessing phase in the pipeline is in charge of standardizing the multiple inputs into formats that are optimized for feature matching and 3D registration. This phase is composed of three main steps:
+
+\textbf{1. Grayscale Conversion:} 
+The feature extraction algorithm works primarily with intensity gradients rather than the RGB channels. Hence, both the scene's RGB image and the target object's 2D template (\texttt{.png}) are converted to grayscale images. This is implemented using OpenCV's \texttt{cv2.cvtColor} function, passing the conversion constant \texttt{cv2.COLOR\_BGR2GRAY} \cite{OpenCV2026}.
+
+\textbf{2. Scene Masking:}
+To reduce the number of false positive matches from outside the bin and minimize the feature matching search area, the 2D bin mask, provided in the dataset, is applied to the grayscale scene image. The mask was applied using the \texttt{cv2.bitwise\_and} function \cite{OpenCV2026}. As a result, we have just the image containing the bin's insides, removing all the pixels that are not relevant for the algorithm.
+
+\textbf{3. Model Point Cloud Generation:} 
+The 3D CAD model, which consists of a mesh of polygons, is converted into a discrete point cloud. This cloud is going to be used later in the pipeline for the ICP registration algorithm. The mesh management is being done through the \texttt{trimesh} library. The mesh is loaded with the \texttt{trimesh.load} function. Then, \texttt{trimesh.sample.sample\_surface} is used by uniformly sampling 3D coordinates across all object faces \cite{Michael2022}. The parameter of \texttt{num\_points = 15000} was chosen to provide an adequate representation of the object without causing unnecessary computational overhead during registration.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{preprocessing_visual.png}
+    \caption{Preprocessing outputs showing the grayscale object texture (left) and the masked grayscale scene image (right) prepared for feature extraction.}
+    \label{fig:preprocessing_phase}
+\end{figure}
+
+\subsubsection{Phase 2: Feature Matching}
+The feature matching phase behaves like a "spotlight" that finds the target object within the bin. Rather than calculating the pose directly from the 2D coordinates of the masked image, this phase just identifies the specific pixels that belong to the target object, which will guide the next phase during the 3D isolation. This phase is broken down into two steps:
+
+\textbf{1. SIFT Detection:}
+To find the matching points between the clean object template and the presented scene, the SIFT algorithm was used because it is useful for dealing with changes in scale, illumination, and rotation. The SIFT detector was created with \texttt{cv2.SIFT\_create()}. Then, with the function \texttt{detectAndCompute()} is called from the created detector using the grayscale template and the masked grayscale scene to obtain the keypoints and descriptors of both images \cite{OpenCV2026}. 
+
+\textbf{2. Feature Matching (with Lowe's Ratio Test):} 
+Because the SIFT descriptors are continuous histograms, the matches are calculated with the Euclidean distance. The Brute-Force matcher, which is the best feature matcher for SIFT descriptors, is created via \texttt{cv2.BFMatcher} using the constant \texttt{cv2.NORM\_L2} to measure distance \cite{OpenCV2026}. To avoid mismatches with the background clutter, the \texttt{crossCheck} parameter is set to (\texttt{False}), and the \texttt{knnMatch()} is used with \texttt{k=2} to obtain the best two matches for every feature present. 
+
+Finally, a geometric filter, Lowe's Ratio Test \cite{Timothy2024}, is applied. This filter just considers a match valid if the distance of the best match is considerably smaller than the distance of the second-best match. A threshold of \texttt{0.75} is used as the most recommended threshold for comparison \cite{OpenCV2026}. By this way, ambiguous matches are filtered out, ensuring that almost all surviving keypoints are from the target object.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{feature_matching_visual.png}
+    \caption{Feature matching using SIFT and Lowe's Ratio Test. The lines connect the isolated features on the 2D template (left) to the target object in the cluttered scene (right).}
+    \label{fig:feature_matching}
+\end{figure}
+
+\subsubsection{Phase 3: 3D Generation and Isolation}
+The third phase of the pipeline acts as the bridge between the 2D image space and the 3D real world. By using the calculated 2D coordinates identified in the previous phase, the pipeline can isolate the 3D structure of the target object and delete the surrounding clutter present in some images. This phase is broken down in three steps:
+
+\textbf{1. 3D Scene Reconstruction:} 
+The 2D depth maps provided in the dataset by the Kinect sensor express the depth values ($Z$) in millimeters \cite{Kurillo2022}, and they need to be converted to meters. Previous to the conversion the bin mask is applied to the depth image to remove unnecessary values. By using the camera matrix provided in the \texttt{calibrations.yml} file, the 2D coordinates $(u, v)$ are projected into the 3D space $(X, Y, Z)$ using the following equations:
+\begin{equation}
+    X = \frac{(u - c_x) \cdot Z}{f_x}, \quad Y = \frac{(v - c_y) \cdot Z}{f_y}
+\end{equation}
+where $f_x, f_y$ represent the focal lengths and $c_x, c_y$ the optical center. The resulting coordinates are piled up using \texttt{numpy.vstack} to create the complete 3D scene point cloud.
+
+\textbf{2. Feature-Guided Centroid Estimation:} 
+To find the 3D center of the object, the pipeline takes the 3D coordinates that matches exclusively with the surviving SIFT matches, obtained from the previous phase. To ensure no remaining outlier is affecting the matches, the median of the 3D points is calculated using the \texttt{numpy} function \texttt{numpy.median(axis=0)}.
+
+Because the depth sensors just capture the visible surface of the scene (hence just the visible surface of the object), placing the translation origin in the surface will cause a depth offset error that affects the pose estimation. To fix this, a hardcoded value for Z-axis shift (0.03 meters) is added to the center of the object, to ensure it is within the physical volume of the object.
+
+\textbf{3. Radial Clutter Cropping:} 
+Now with a 3D center established, the pipeline can isolate the object from the bin. To perform this task, the Euclidean distance between the points in the scene cloud and the calculated center is computed using \texttt{numpy.linalg.norm} \cite{NumPy2025}. Then a filter is applied, keeping only the points that fall within the hardcoded crop\_radius, for this pipeline, about 0.12 m. The points that survive are then used to create a new \texttt{PointCloud}. By reducing the point count we remove the clutter present in the registration step, and we optimize the pipeline performance for later steps.
+
+\subsubsection{Phase 4: Pose Registration}
+For the last phase, the pipeline performs an alignment of the 3D CAD model of the object to the isolated sensor data to obtain the exact pose. Because the bin clutter has been removed from the target object in previous phases, the registration step can work at good speeds without distraction from surrounding clutter. This phase is broken down into two steps:
+
+\textbf{1. Multi-Hypothesis Initialization:}
+A common pitfall in 3D pose estimation for any regular objects (like the cuboid boxes in the dataset) is the "local minima" problem, where the algorithm may align the wrong face of the CAD model with the real object, resulting in an immense rotational error. To minimize this problem, a multi-hypothesis step is introduced.
+
+The translation origin is set to the 3D center calculated during the previous phase. Then, using the \texttt{scipy.spatial.transform.Rotation} library, \texttt{R.from\_euler} function, multiple initial rotations are generated (e.g., $0^\circ$ and $180^\circ$ around all axes).
+
+\textbf{2. Iterative Closest Point (ICP):}
+Both the scene and model point clouds are aligned using the \texttt{trimesh.registration.icp} function. Then, a "coarse-to-fine" strategy is implemented to boost the speed and accuracy:
+
+\begin{itemize}
+    \item \textbf{Coarse Pass:} The ICP algorithm performs a quick test with all the initialized rotation hypotheses using a low iteration count and loose threshold (iterations = 20, threshold=1e-4). Then we calculate the alignment cost for each hypothesis, and the lowest one is selected as the winner candidate for the next pass.
+    
+    \item \textbf{Fine Pass:} 
+    The winning hypothesis (matrix) is taken back again to the ICP algorithm for a stricter pass. The parameters used for this ICP run are for the \texttt{iterations = 60} and the \texttt{threshold=1e-6}, allowing the algorithm to place the 3D model onto the scene cloud.
+\end{itemize}
+
+As a result, the final homogeneous transformation matrix is given. Then the pipeline extracts the estimated Rotation ($R_{est}$) matrix and Translation vector ($t_{est}$).
